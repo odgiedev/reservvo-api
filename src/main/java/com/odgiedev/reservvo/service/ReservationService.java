@@ -2,7 +2,6 @@ package com.odgiedev.reservvo.service;
 
 import com.odgiedev.reservvo.dto.request.ReservationRequest;
 import com.odgiedev.reservvo.dto.response.ReservationResponse;
-import com.odgiedev.reservvo.entity.AvailabilityRule;
 import com.odgiedev.reservvo.entity.Reservation;
 import com.odgiedev.reservvo.entity.Resource;
 import com.odgiedev.reservvo.entity.User;
@@ -12,14 +11,14 @@ import com.odgiedev.reservvo.repository.AvailabilityRuleRepository;
 import com.odgiedev.reservvo.repository.ReservationRepository;
 import com.odgiedev.reservvo.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +28,9 @@ public class ReservationService {
     private final ResourceRepository resourceRepository;
     private final AvailabilityRuleRepository availabilityRuleRepository;
     private final NotificationService notificationService;
+    private final CacheManager cacheManager;
 
+    @CacheEvict(value = "slots", key = "#request.resourceId() + '_' + #request.date()")
     public ReservationResponse create(ReservationRequest request, User client) {
         Resource resource = resourceRepository.findById(request.resourceId())
                 .orElseThrow(() -> new BusinessException("Recurso não encontrado"));
@@ -117,8 +118,10 @@ public class ReservationService {
 
         reservation.setStatus(ReservationStatus.CANCELLED_BY_CLIENT);
         reservationRepository.save(reservation);
+
         //notificationService.sendCancellation(reservation);
 
+        evictSlotsCache(reservation);
         return toResponse(reservation);
     }
 
@@ -136,11 +139,14 @@ public class ReservationService {
 
         reservation.setStatus(ReservationStatus.CANCELLED_BY_PROVIDER);
         reservationRepository.save(reservation);
+
         //notificationService.sendCancellation(reservation);
 
+        evictSlotsCache(reservation);
         return toResponse(reservation);
     }
 
+    @Cacheable(value = "slots", key = "#resourceId + '_' + #date")
     public List<LocalTime> getAvailableSlots(UUID resourceId, LocalDate date) {
         Resource resource = resourceRepository.findById(resourceId)
                 .orElseThrow(() -> new BusinessException("Recurso não encontrado"));
@@ -162,9 +168,11 @@ public class ReservationService {
                         if (!conflict) slots.add(current);
                         current = slotEnd;
                     }
+
                     return slots;
                 })
                 .orElse(List.of());
+
     }
 
     private ReservationResponse toResponse(Reservation reservation) {
@@ -182,5 +190,10 @@ public class ReservationService {
                 reservation.getNotes(),
                 reservation.getCreatedAt()
         );
+    }
+
+    private void evictSlotsCache(Reservation reservation) {
+        String cacheKey = reservation.getResource().getId() + "_" + reservation.getDate();
+        Objects.requireNonNull(cacheManager.getCache("slots")).evict(cacheKey);
     }
 }
