@@ -50,7 +50,6 @@ public class RedisStreamsConfig {
             NotificationService notificationService,
             @Qualifier("redisStreamTemplate") RedisTemplate<String, String> redisTemplate) {
 
-        // cria o stream e consumer group se não existirem
         initializeStream(redisTemplate);
 
         StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, MapRecord<String, String, String>> options =
