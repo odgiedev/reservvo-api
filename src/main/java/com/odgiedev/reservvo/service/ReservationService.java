@@ -83,7 +83,7 @@ public class ReservationService {
                 .build();
 
         reservationRepository.save(reservation);
-        //notificationService.sendConfirmation(reservation);
+        notificationService.sendConfirmation(reservation);
 
         return toResponse(reservation);
     }
@@ -119,7 +119,7 @@ public class ReservationService {
         reservation.setStatus(ReservationStatus.CANCELLED_BY_CLIENT);
         reservationRepository.save(reservation);
 
-        //notificationService.sendCancellation(reservation);
+        notificationService.sendCancellation(reservation);
 
         evictSlotsCache(reservation);
         return toResponse(reservation);
@@ -140,7 +140,7 @@ public class ReservationService {
         reservation.setStatus(ReservationStatus.CANCELLED_BY_PROVIDER);
         reservationRepository.save(reservation);
 
-        //notificationService.sendCancellation(reservation);
+        notificationService.sendCancellation(reservation);
 
         evictSlotsCache(reservation);
         return toResponse(reservation);

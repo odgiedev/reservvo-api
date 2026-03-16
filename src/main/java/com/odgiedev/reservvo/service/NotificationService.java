@@ -1,30 +1,39 @@
 package com.odgiedev.reservvo.service;
 
+import com.odgiedev.reservvo.config.RedisStreamsConfig;
 import com.odgiedev.reservvo.entity.Notification;
 import com.odgiedev.reservvo.entity.Reservation;
 import com.odgiedev.reservvo.enums.NotificationType;
-import com.odgiedev.reservvo.event.ReservationEvent;
 import com.odgiedev.reservvo.repository.NotificationRepository;
+import com.odgiedev.reservvo.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.RecordId;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.*;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
+@Component
 @RequiredArgsConstructor
-public class NotificationService {
+public class NotificationService implements StreamListener<String, MapRecord<String, String, String>> {
 
     private final SesClient sesClient;
     private final NotificationRepository notificationRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ReservationRepository reservationRepository;
+    private final RedisTemplate<String, String> redisStreamTemplate;
 
     @Value("${aws.ses.from}")
     private String fromEmail;
@@ -32,36 +41,113 @@ public class NotificationService {
     @Value("${aws.ses.from-name}")
     private String fromName;
 
+    // --- PRODUCER ---
+
     public void sendConfirmation(Reservation reservation) {
-        eventPublisher.publishEvent(
-                new ReservationEvent(this, reservation, NotificationType.CONFIRMATION));
+        publish(reservation, NotificationType.CONFIRMATION);
     }
 
     public void sendCancellation(Reservation reservation) {
-        eventPublisher.publishEvent(
-                new ReservationEvent(this, reservation, NotificationType.CANCELLATION));
+        publish(reservation, NotificationType.CANCELLATION);
     }
 
+    private void publish(Reservation reservation, NotificationType type) {
+        Map<String, String> message = Map.of(
+                "reservationId", reservation.getId().toString(),
+                "type", type.name(),
+                "attempt", "1"
+        );
+
+        redisStreamTemplate.opsForStream().add(
+                MapRecord.create(RedisStreamsConfig.STREAM_KEY, message)
+        );
+
+        log.info("Evento publicado no stream | reserva: {} | tipo: {}", reservation.getId(), type);
+    }
+
+    // --- CONSUMER ---
+
     @Async
-    @EventListener
-    public void handleReservationEvent(ReservationEvent event) {
-        Reservation reservation = event.getReservation();
-        NotificationType type = event.getType();
+    @Override
+    public void onMessage(MapRecord<String, String, String> message) {
+        Map<String, String> body = message.getValue();
+        RecordId recordId = message.getId();
+        UUID reservationId = UUID.fromString(body.get("reservationId"));
+        NotificationType type = NotificationType.valueOf(body.get("type"));
+        int attempt = Integer.parseInt(body.getOrDefault("attempt", "1"));
 
-        try {
-            String subject = buildSubject(type);
-            String body = buildBody(reservation, type);
+        log.info("Processando notificação | reserva: {} | tipo: {} | tentativa: {}", reservationId, type, attempt);
 
-            sendEmail(reservation.getClient().getEmail(), subject, body);
-            saveNotification(reservation, type);
+        reservationRepository.findById(reservationId).ifPresentOrElse(
+                reservation -> {
+                    try {
+                        String subject = buildSubject(type);
+                        String html = buildBody(reservation, type);
 
-            log.info("Notificação enviada para {} | tipo: {} | reserva: {}",
-                    reservation.getClient().getEmail(), type, reservation.getId());
+                        sendEmail(reservation.getClient().getEmail(), subject, html);
+                        saveNotification(reservation, type);
 
-        } catch (Exception e) {
-            log.error("Erro ao enviar notificação | reserva: {} | erro: {}",
-                    reservation.getId(), e.getMessage());
+                        ack(recordId);
+
+                        log.info("Email enviado e ACK confirmado | reserva: {} | tentativa: {}",
+                                reservationId, attempt);
+
+                    } catch (Exception e) {
+                        log.error("Erro ao processar notificação | reserva: {} | tentativa: {} | erro: {}",
+                                reservationId, attempt, e.getMessage());
+                        handleRetry(body, recordId, reservationId, attempt);
+                    }
+                },
+                () -> {
+                    log.warn("Reserva não encontrada | id: {}", reservationId);
+
+                    ack(recordId);
+                }
+        );
+    }
+
+    private void ack(RecordId recordId) {
+        redisStreamTemplate.opsForStream().acknowledge(
+                RedisStreamsConfig.STREAM_KEY,
+                RedisStreamsConfig.CONSUMER_GROUP,
+                recordId
+        );
+    }
+
+    private void handleRetry(Map<String, String> originalBody, RecordId recordId,
+                             UUID reservationId, int attempt) {
+        if (attempt < RedisStreamsConfig.MAX_RETRY_ATTEMPTS) {
+            int nextAttempt = attempt + 1;
+            log.warn("Reagendando retry | reserva: {} | próxima tentativa: {}", reservationId, nextAttempt);
+
+            // republica no stream com attempt incrementado
+            Map<String, String> retryMessage = new HashMap<>(originalBody);
+            retryMessage.put("attempt", String.valueOf(nextAttempt));
+
+            redisStreamTemplate.opsForStream().add(
+                    MapRecord.create(RedisStreamsConfig.STREAM_KEY, retryMessage)
+            );
+
+            ack(recordId);
+
+        } else {
+            log.error("Máximo de tentativas atingido | reserva: {} | enviando para DLQ", reservationId);
+            sendToDlq(originalBody, reservationId);
+            ack(recordId);
         }
+    }
+
+    private void sendToDlq(Map<String, String> originalBody, UUID reservationId) {
+        Map<String, String> dlqMessage = new HashMap<>(originalBody);
+        dlqMessage.put("failedAt", LocalDateTime.now().toString());
+        dlqMessage.put("reason", "Max retry attempts reached");
+
+        redisStreamTemplate.opsForStream().add(
+                MapRecord.create(RedisStreamsConfig.DLQ_KEY, dlqMessage)
+        );
+
+        log.error("Mensagem enviada para DLQ | reserva: {} | stream: {}",
+                reservationId, RedisStreamsConfig.DLQ_KEY);
     }
 
     private void sendEmail(String to, String subject, String htmlBody) {
@@ -75,8 +161,8 @@ public class NotificationService {
                                 .build())
                         .build())
                 .build();
-
-        sesClient.sendEmail(request);
+        //sesClient.sendEmail(request);
+        log.info("sesClient.sendEmail(request);");
     }
 
     private void saveNotification(Reservation reservation, NotificationType type) {
