@@ -158,9 +158,10 @@ public class ReservationService {
                 .filter(rule -> rule.getDayOfWeek() == dayOfWeek)
                 .findFirst()
                 .map(rule -> {
-                    System.out.println(rule.getId());
                     List<LocalTime> slots = new ArrayList<>();
-                    LocalTime current = rule.getStartTime(); //8
+
+                    LocalTime current = rule.getStartTime();
+
                     while (!current.plusMinutes(resource.getSlotDurationMin()).isAfter(rule.getEndTime())) {
                         LocalTime slotEnd = current.plusMinutes(resource.getSlotDurationMin());
                         boolean conflict = reservationRepository.existsConflict(
