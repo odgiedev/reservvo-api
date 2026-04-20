@@ -14,7 +14,7 @@
 	</parent>
 
 	<groupId>com.odgiedev</groupId>
-	<artifactId>reservvo</artifactId>
+	<artifactId>reservvo-api</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>reservvo</name>
 	<description>Sistema de Reservas e Agendamentos</description>
@@ -98,6 +98,12 @@
 		</dependency>
 
 		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.0.2</version>
+		</dependency>
+
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
@@ -151,6 +157,20 @@
 					<argLine>
 						-javaagent:${settings.localRepository}/org/mockito/mockito-core/5.20.0/mockito-core-5.20.0.jar
 					</argLine>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>25</source>
+					<target>25</target>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</path>
+					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
 		</plugins>
