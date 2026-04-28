@@ -7,7 +7,9 @@ public record ProviderResponse(
         UUID id,
         UUID userId,
         String businessName,
+        String slug,
         String description,
         String category,
+        String phone,
         LocalDateTime createdAt
 ) {}

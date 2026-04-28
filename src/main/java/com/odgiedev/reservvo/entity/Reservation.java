@@ -51,7 +51,9 @@ public class Reservation {
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
-        this.status = ReservationStatus.CONFIRMED;
+        if (this.status == null) {
+            this.status = ReservationStatus.CONFIRMED;
+        }
     }
 
     @PreUpdate

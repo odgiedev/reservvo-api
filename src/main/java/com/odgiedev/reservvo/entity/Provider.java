@@ -24,9 +24,15 @@ public class Provider {
     @Column(nullable = false)
     private String businessName;
 
+    @Column(nullable = false, unique = true)
+    private String slug;
+
     private String description;
 
     private String category;
+
+    @Column(length = 20)
+    private String phone;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

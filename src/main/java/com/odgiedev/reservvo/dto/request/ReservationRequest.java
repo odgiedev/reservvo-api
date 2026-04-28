@@ -1,6 +1,6 @@
 package com.odgiedev.reservvo.dto.request;
 
-import jakarta.validation.constraints.Future;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -11,7 +11,7 @@ public record ReservationRequest(
         UUID resourceId,
 
         @NotNull(message = "Data obrigatória")
-        @Future(message = "Data deve ser no futuro")
+        @FutureOrPresent(message = "Data não pode ser no passado")
         LocalDate date,
 
         @NotNull(message = "Horário de início obrigatório")

@@ -1,12 +1,14 @@
 package com.odgiedev.reservvo.exception;
 
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -63,9 +65,14 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Erro interno do servidor");
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        return buildResponse(HttpStatus.CONFLICT, "Dados duplicados");
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleNotReadable(HttpMessageNotReadableException ex) {
-        String message = "Valor inválido no corpo da requisição";
+        String message = "Valor inválido ou faltante no corpo da requisição";
 
         Throwable cause = ex.getCause();
         if (cause instanceof InvalidFormatException ife) {
@@ -87,7 +94,6 @@ public class GlobalExceptionHandler {
 
         ex.getConstraintViolations().forEach(violation -> {
             String field = violation.getPropertyPath().toString();
-            // pega apenas o nome do campo, sem o caminho completo
             field = field.substring(field.lastIndexOf('.') + 1);
             errors.put(field, violation.getMessage());
         });
@@ -114,6 +120,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         String message = String.format("Valor inválido para o parâmetro '%s'", ex.getName());
+        return buildResponse(HttpStatus.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParam(
+            MissingServletRequestParameterException ex) {
+
+        String message = String.format(
+                "Parâmetro obrigatório '%s' não foi informado",
+                ex.getParameterName()
+        );
+
         return buildResponse(HttpStatus.BAD_REQUEST, message);
     }
 }
