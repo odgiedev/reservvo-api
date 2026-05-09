@@ -8,5 +8,10 @@ import java.util.UUID;
 
 public interface ProviderRepository extends JpaRepository<Provider, UUID> {
     Optional<Provider> findByUserId(UUID userId);
+
     boolean existsByUserId(UUID userId);
+
+    Optional<Provider> findBySlug(String slug);
+
+    boolean existsBySlugAndIdNot(String slug, UUID id);
 }

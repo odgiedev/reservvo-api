@@ -1,25 +1,34 @@
 package com.odgiedev.reservvo.service;
 
 import com.odgiedev.reservvo.dto.request.ReservationRequest;
+import com.odgiedev.reservvo.dto.response.PageResponse;
 import com.odgiedev.reservvo.dto.response.ReservationResponse;
+import com.odgiedev.reservvo.dto.response.ReservationStatsResponse;
 import com.odgiedev.reservvo.entity.Reservation;
 import com.odgiedev.reservvo.entity.Resource;
 import com.odgiedev.reservvo.entity.User;
 import com.odgiedev.reservvo.enums.ReservationStatus;
+import com.odgiedev.reservvo.enums.UserRole;
 import com.odgiedev.reservvo.exception.BusinessException;
 import com.odgiedev.reservvo.repository.AvailabilityRuleRepository;
 import com.odgiedev.reservvo.repository.ReservationRepository;
+import com.odgiedev.reservvo.repository.ReservationRepository.StatusCount;
 import com.odgiedev.reservvo.repository.ResourceRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReservationService {
@@ -39,7 +48,14 @@ public class ReservationService {
             throw new BusinessException("Recurso indisponível");
         }
 
-        // valida se o dia da semana está disponível
+        if (client.getRole() == UserRole.PROVIDER) {
+            throw new BusinessException("Usuario PROVIDER não reserva");
+        }
+
+        if (request.date().equals(LocalDate.now()) && !request.startTime().isAfter(LocalTime.now())) {
+            throw new BusinessException("Horário deve ser no futuro");
+        }
+
         int dayOfWeek = request.date().getDayOfWeek().getValue() % 7;
 
         boolean dayAvailable = availabilityRuleRepository
@@ -51,10 +67,8 @@ public class ReservationService {
             throw new BusinessException("Recurso não disponível nesse dia da semana");
         }
 
-        // calcula o endTime baseado no slotDurationMin do recurso
         LocalTime endTime = request.startTime().plusMinutes(resource.getSlotDurationMin());
 
-        // valida se o horário está dentro da disponibilidade
         boolean timeAvailable = availabilityRuleRepository
                 .findByResourceId(resource.getId())
                 .stream()
@@ -68,7 +82,6 @@ public class ReservationService {
             throw new BusinessException("Horário fora do período disponível");
         }
 
-        // valida conflito com outras reservas
         if (reservationRepository.existsConflict(resource.getId(), request.date(), request.startTime(), endTime)) {
             throw new BusinessException("Horário já reservado");
         }
@@ -83,21 +96,51 @@ public class ReservationService {
                 .build();
 
         reservationRepository.save(reservation);
+        log.info("Reserva criada | reservationId: {} | clientId: {} | resourceId: {} | data: {} {}",
+                reservation.getId(), client.getId(), resource.getId(),
+                reservation.getDate(), reservation.getStartTime());
         notificationService.sendConfirmation(reservation);
 
         return toResponse(reservation);
     }
 
-    public List<ReservationResponse> listByClient(User client) {
-        return reservationRepository
-                .findByClientIdOrderByDateDescStartTimeDesc(client.getId())
-                .stream().map(this::toResponse).toList();
+    public PageResponse<ReservationResponse> listByClient(User client, int page, int size,
+                                                           ReservationStatus status) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")));
+        var pageResult = status != null
+                ? reservationRepository.findByClientIdAndStatus(client.getId(), status, pageable)
+                : reservationRepository.findByClientId(client.getId(), pageable);
+        return PageResponse.of(pageResult, this::toResponse);
     }
 
-    public List<ReservationResponse> listByProvider(User providerUser) {
-        return reservationRepository
-                .findByResourceProviderUserIdOrderByDateDescStartTimeDesc(providerUser.getId())
-                .stream().map(this::toResponse).toList();
+    public PageResponse<ReservationResponse> listByProvider(User providerUser, int page, int size,
+                                                             ReservationStatus status) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt")));
+        var pageResult = status != null
+                ? reservationRepository.findByResourceProviderUserIdAndStatus(providerUser.getId(), status, pageable)
+                : reservationRepository.findByResourceProviderUserId(providerUser.getId(), pageable);
+        return PageResponse.of(pageResult, this::toResponse);
+    }
+
+    public ReservationStatsResponse stats(User user) {
+        List<StatusCount> counts = user.getRole() == UserRole.CLIENT
+                ? reservationRepository.countByStatusForClient(user.getId())
+                : reservationRepository.countByStatusForProvider(user.getId());
+        return buildStats(counts);
+    }
+
+    private ReservationStatsResponse buildStats(List<StatusCount> counts) {
+        long confirmed = 0, completed = 0, cancelledByProvider = 0, cancelledByClient = 0;
+        for (StatusCount sc : counts) {
+            switch (sc.getStatus()) {
+                case CONFIRMED -> confirmed = sc.getCount();
+                case COMPLETED -> completed = sc.getCount();
+                case CANCELLED_BY_PROVIDER -> cancelledByProvider = sc.getCount();
+                case CANCELLED_BY_CLIENT -> cancelledByClient = sc.getCount();
+            }
+        }
+        return new ReservationStatsResponse(confirmed, completed, cancelledByProvider, cancelledByClient,
+                confirmed + completed + cancelledByProvider + cancelledByClient);
     }
 
     public ReservationResponse cancelByClient(UUID reservationId, User client) {
@@ -118,6 +161,8 @@ public class ReservationService {
 
         reservation.setStatus(ReservationStatus.CANCELLED_BY_CLIENT);
         reservationRepository.save(reservation);
+        log.info("Reserva cancelada pelo cliente | reservationId: {} | clientId: {}",
+                reservationId, client.getId());
 
         notificationService.sendCancellation(reservation);
 
@@ -139,6 +184,8 @@ public class ReservationService {
 
         reservation.setStatus(ReservationStatus.CANCELLED_BY_PROVIDER);
         reservationRepository.save(reservation);
+        log.info("Reserva cancelada pelo provider | reservationId: {} | providerUserId: {}",
+                reservationId, providerUser.getId());
 
         notificationService.sendCancellation(reservation);
 
@@ -183,7 +230,9 @@ public class ReservationService {
                 reservation.getResource().getName(),
                 reservation.getClient().getId(),
                 reservation.getClient().getName(),
+                reservation.getClient().getPhone(),
                 reservation.getResource().getProvider().getBusinessName(),
+                reservation.getResource().getProvider().getPhone(),
                 reservation.getDate(),
                 reservation.getStartTime(),
                 reservation.getEndTime(),
@@ -196,5 +245,6 @@ public class ReservationService {
     private void evictSlotsCache(Reservation reservation) {
         String cacheKey = reservation.getResource().getId() + "_" + reservation.getDate();
         Objects.requireNonNull(cacheManager.getCache("slots")).evict(cacheKey);
+        log.debug("Cache 'slots' evicted | key: {}", cacheKey);
     }
 }

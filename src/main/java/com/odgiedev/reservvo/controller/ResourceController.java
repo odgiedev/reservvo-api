@@ -2,6 +2,7 @@ package com.odgiedev.reservvo.controller;
 
 import com.odgiedev.reservvo.dto.request.AvailabilityRuleRequest;
 import com.odgiedev.reservvo.dto.request.ResourceRequest;
+import com.odgiedev.reservvo.dto.request.UpdateActiveRequest;
 import com.odgiedev.reservvo.dto.response.AvailabilityRuleResponse;
 import com.odgiedev.reservvo.dto.response.ResourceResponse;
 import com.odgiedev.reservvo.entity.User;
@@ -37,6 +38,11 @@ public class ResourceController {
         return ResponseEntity.ok(resourceService.listByProvider(user));
     }
 
+    @GetMapping("/provider/{providerId}")
+    public ResponseEntity<List<ResourceResponse>> listByProviderId(@PathVariable UUID providerId) {
+        return ResponseEntity.ok(resourceService.listByProviderId(providerId));
+    }
+
     @PutMapping("/{resourceId}")
     public ResponseEntity<ResourceResponse> update(
             @PathVariable UUID resourceId,
@@ -45,12 +51,21 @@ public class ResourceController {
         return ResponseEntity.ok(resourceService.update(resourceId, request, user));
     }
 
+    @PatchMapping("/{resourceId}/active")
+    public ResponseEntity<ResourceResponse> updateActive(
+            @PathVariable UUID resourceId,
+            @Valid @RequestBody UpdateActiveRequest active,
+            @AuthenticationPrincipal User user) {
+
+        return ResponseEntity.ok(resourceService.updateActive(resourceId, active, user));
+    }
+
     @DeleteMapping("/{resourceId}")
-    public ResponseEntity<ResourceResponse> deactivate(
+    public ResponseEntity<ResourceResponse> delete(
             @PathVariable UUID resourceId,
             @AuthenticationPrincipal User user) {
 
-        return ResponseEntity.ok(resourceService.deactivate(resourceId, user));
+        return ResponseEntity.ok(resourceService.delete(resourceId, user));
     }
 
     @PutMapping("/{resourceId}/availability")

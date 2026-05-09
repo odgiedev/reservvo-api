@@ -36,4 +36,11 @@ public class ProviderController {
             @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(providerService.update(request, user));
     }
+
+    @GetMapping("/slug/{slug}")
+    public ResponseEntity<ProviderResponse> getBySlug(
+            @PathVariable String slug
+    ) {
+        return ResponseEntity.ok(providerService.getBySlug(slug));
+    }
 }

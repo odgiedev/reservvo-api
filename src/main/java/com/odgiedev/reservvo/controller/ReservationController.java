@@ -1,8 +1,11 @@
 package com.odgiedev.reservvo.controller;
 
 import com.odgiedev.reservvo.dto.request.ReservationRequest;
+import com.odgiedev.reservvo.dto.response.PageResponse;
 import com.odgiedev.reservvo.dto.response.ReservationResponse;
+import com.odgiedev.reservvo.dto.response.ReservationStatsResponse;
 import com.odgiedev.reservvo.entity.User;
+import com.odgiedev.reservvo.enums.ReservationStatus;
 import com.odgiedev.reservvo.service.ReservationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,13 +37,26 @@ public class ReservationController {
     }
 
     @GetMapping("/client")
-    public ResponseEntity<List<ReservationResponse>> listByClient(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(reservationService.listByClient(user));
+    public ResponseEntity<PageResponse<ReservationResponse>> listByClient(
+            @AuthenticationPrincipal User user,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) ReservationStatus status) {
+        return ResponseEntity.ok(reservationService.listByClient(user, page, size, status));
     }
 
     @GetMapping("/provider")
-    public ResponseEntity<List<ReservationResponse>> listByProvider(@AuthenticationPrincipal User user) {
-        return ResponseEntity.ok(reservationService.listByProvider(user));
+    public ResponseEntity<PageResponse<ReservationResponse>> listByProvider(
+            @AuthenticationPrincipal User user,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) ReservationStatus status) {
+        return ResponseEntity.ok(reservationService.listByProvider(user, page, size, status));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<ReservationStatsResponse> stats(@AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(reservationService.stats(user));
     }
 
     @PatchMapping("/{reservationId}/cancel/client")

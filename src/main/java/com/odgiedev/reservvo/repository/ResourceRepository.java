@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface ResourceRepository extends JpaRepository<Resource, UUID> {
     List<Resource> findByProviderIdAndActiveTrue(UUID providerId);
+
+    List<Resource> findByProviderId(UUID providerId);
 }
