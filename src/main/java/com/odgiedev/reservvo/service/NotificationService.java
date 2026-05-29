@@ -41,8 +41,6 @@ public class NotificationService implements StreamListener<String, MapRecord<Str
     @Value("${aws.ses.from-name}")
     private String fromName;
 
-    // --- PRODUCER ---
-
     public void sendConfirmation(Reservation reservation) {
         publish(reservation, NotificationType.CONFIRMATION);
     }
@@ -64,8 +62,6 @@ public class NotificationService implements StreamListener<String, MapRecord<Str
 
         log.info("Evento publicado no stream | reserva: {} | tipo: {}", reservation.getId(), type);
     }
-
-    // --- CONSUMER ---
 
     @Async
     @Override
@@ -120,7 +116,6 @@ public class NotificationService implements StreamListener<String, MapRecord<Str
             int nextAttempt = attempt + 1;
             log.warn("Reagendando retry | reserva: {} | próxima tentativa: {}", reservationId, nextAttempt);
 
-            // republica no stream com attempt incrementado
             Map<String, String> retryMessage = new HashMap<>(originalBody);
             retryMessage.put("attempt", String.valueOf(nextAttempt));
 
@@ -161,8 +156,8 @@ public class NotificationService implements StreamListener<String, MapRecord<Str
                                 .build())
                         .build())
                 .build();
-        //sesClient.sendEmail(request);
-        log.info("sesClient.sendEmail(request);");
+        sesClient.sendEmail(request);
+        log.info("Email enviado via SES | destinatário: {} | assunto: {}", to, subject);
     }
 
     private void saveNotification(Reservation reservation, NotificationType type) {

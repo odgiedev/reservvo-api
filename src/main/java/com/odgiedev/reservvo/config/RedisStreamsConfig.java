@@ -58,6 +58,15 @@ public class RedisStreamsConfig {
                 StreamMessageListenerContainer.StreamMessageListenerContainerOptions
                         .builder()
                         .pollTimeout(Duration.ofSeconds(2))
+                        .errorHandler(throwable -> {
+                            String msg = throwable.getMessage();
+                            if (msg != null && (msg.contains("Connection closed")
+                                    || msg.contains("Connection is already closed"))) {
+                                log.debug("Stream listener: conexão Redis temporariamente indisponível. Reconectando...");
+                            } else {
+                                log.error("Stream listener erro inesperado | erro: {}", msg);
+                            }
+                        })
                         .build();
 
         StreamMessageListenerContainer<String, MapRecord<String, String, String>> container =
@@ -78,7 +87,9 @@ public class RedisStreamsConfig {
             redisTemplate.opsForStream().createGroup(STREAM_KEY, ReadOffset.from("0-0"), CONSUMER_GROUP);
             log.info("Consumer group '{}' criado no stream '{}'", CONSUMER_GROUP, STREAM_KEY);
         } catch (Exception e) {
-            //
+
+            log.debug("Consumer group '{}' já existe ou Redis indisponível: {}",
+                    CONSUMER_GROUP, e.getMessage());
         }
     }
 }
