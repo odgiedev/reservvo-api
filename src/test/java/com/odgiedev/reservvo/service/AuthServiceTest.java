@@ -36,6 +36,7 @@ class AuthServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtService jwtService;
     @Mock private AuthenticationManager authenticationManager;
+    @Mock private ProviderService providerService;
 
     @InjectMocks
     private AuthService authService;
@@ -149,6 +150,7 @@ class AuthServiceTest {
             AuthResponse response = authService.register(request);
 
             assertThat(response.role()).isEqualTo(UserRole.PROVIDER);
+            verify(providerService).createDefaultForUser(any());
         }
     }
 

@@ -2,6 +2,7 @@ package com.odgiedev.reservvo.service;
 
 import com.odgiedev.reservvo.dto.request.AvailabilityRuleRequest;
 import com.odgiedev.reservvo.dto.request.ResourceRequest;
+import com.odgiedev.reservvo.dto.request.UpdateActiveRequest;
 import com.odgiedev.reservvo.dto.response.AvailabilityRuleResponse;
 import com.odgiedev.reservvo.dto.response.ResourceResponse;
 import com.odgiedev.reservvo.entity.*;
@@ -119,7 +120,7 @@ class ResourceServiceTest {
                     .build();
 
             when(providerService.getEntityByUser(providerUser)).thenReturn(provider);
-            when(resourceRepository.findByProviderIdAndActiveTrue(provider.getId()))
+            when(resourceRepository.findByProviderId(provider.getId()))
                     .thenReturn(List.of(resource, resource2));
 
             List<ResourceResponse> responses = resourceService.listByProvider(providerUser);
@@ -132,7 +133,7 @@ class ResourceServiceTest {
         @DisplayName("deve retornar lista vazia quando não há recursos")
         void shouldReturnEmptyListWhenNoResources() {
             when(providerService.getEntityByUser(providerUser)).thenReturn(provider);
-            when(resourceRepository.findByProviderIdAndActiveTrue(provider.getId()))
+            when(resourceRepository.findByProviderId(provider.getId()))
                     .thenReturn(List.of());
 
             List<ResourceResponse> responses = resourceService.listByProvider(providerUser);
@@ -156,7 +157,7 @@ class ResourceServiceTest {
 
             ResourceResponse response = resourceService.update(resource.getId(), request, providerUser);
 
-            assertThat(response.name()).isEqualTo("Cadeira VIP");
+            assertThat(response.name()).isEqualTo("Cadeira Vip");
             assertThat(response.slotDurationMin()).isEqualTo(90);
         }
 
@@ -203,19 +204,34 @@ class ResourceServiceTest {
     }
 
     @Nested
-    @DisplayName("deactivate()")
-    class Deactivate {
+    @DisplayName("updateActive()")
+    class UpdateActive {
 
         @Test
-        @DisplayName("deve desativar recurso com sucesso")
-        void shouldDeactivateResourceSuccessfully() {
+        @DisplayName("deve desativar recurso quando active=false")
+        void shouldDeactivateResource() {
             when(providerService.getEntityByUser(providerUser)).thenReturn(provider);
             when(resourceRepository.findById(resource.getId())).thenReturn(Optional.of(resource));
             when(resourceRepository.save(any())).thenReturn(resource);
 
-            resourceService.deactivate(resource.getId(), providerUser);
+            resourceService.updateActive(resource.getId(), new UpdateActiveRequest(false), providerUser);
 
             assertThat(resource.getActive()).isFalse();
+            verify(resourceRepository).save(resource);
+        }
+
+        @Test
+        @DisplayName("deve ativar recurso quando active=true")
+        void shouldActivateResource() {
+            resource.setActive(false);
+
+            when(providerService.getEntityByUser(providerUser)).thenReturn(provider);
+            when(resourceRepository.findById(resource.getId())).thenReturn(Optional.of(resource));
+            when(resourceRepository.save(any())).thenReturn(resource);
+
+            resourceService.updateActive(resource.getId(), new UpdateActiveRequest(true), providerUser);
+
+            assertThat(resource.getActive()).isTrue();
             verify(resourceRepository).save(resource);
         }
     }

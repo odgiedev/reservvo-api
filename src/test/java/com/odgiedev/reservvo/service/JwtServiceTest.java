@@ -29,7 +29,6 @@ class JwtServiceTest {
     void setUp() {
         jwtService = new JwtService();
 
-        // injeta os valores do application.properties manualmente
         ReflectionTestUtils.setField(jwtService, "secret",
                 "test-secret-key-that-is-long-enough-for-hmac-sha256");
         ReflectionTestUtils.setField(jwtService, "expiration", 86400000L);

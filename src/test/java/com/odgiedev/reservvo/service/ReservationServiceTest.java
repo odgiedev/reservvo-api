@@ -78,7 +78,6 @@ class ReservationServiceTest {
                 .active(true)
                 .build();
 
-        // segunda-feira (1) das 08:00 às 20:00
         mondayRule = AvailabilityRule.builder()
                 .id(UUID.randomUUID())
                 .resource(resource)
@@ -88,7 +87,6 @@ class ReservationServiceTest {
                 .build();
     }
 
-    // segunda-feira futura para os testes
     private LocalDate nextMonday() {
         LocalDate date = LocalDate.now().plusDays(1);
         while (date.getDayOfWeek().getValue() != 1) {
@@ -390,7 +388,6 @@ class ReservationServiceTest {
 
             var slots = reservationService.getAvailableSlots(resource.getId(), date);
 
-            // 08:00 até 20:00 com slots de 60min = 12 slots
             assertThat(slots).hasSize(12);
             assertThat(slots.getFirst()).isEqualTo(LocalTime.of(8, 0));
             assertThat(slots.get(11)).isEqualTo(LocalTime.of(19, 0));

@@ -63,7 +63,7 @@ class ProviderServiceTest {
         @DisplayName("deve criar negócio com sucesso")
         void shouldCreateProviderSuccessfully() {
             ProviderRequest request = new ProviderRequest(
-                    "Barbearia do João", "Cortes modernos", "Barbearia"
+                    "Barbearia do João", "barbearia-do-joao", "Cortes modernos", "Barbearia", null
             );
 
             when(providerRepository.existsByUserId(user.getId())).thenReturn(false);
@@ -76,7 +76,7 @@ class ProviderServiceTest {
             ProviderResponse response = providerService.create(request, user);
 
             assertThat(response).isNotNull();
-            assertThat(response.businessName()).isEqualTo("Barbearia do João");
+            assertThat(response.businessName()).isEqualTo("Barbearia Do João");
             assertThat(response.description()).isEqualTo("Cortes modernos");
             assertThat(response.category()).isEqualTo("Barbearia");
             assertThat(response.userId()).isEqualTo(user.getId());
@@ -88,7 +88,7 @@ class ProviderServiceTest {
         @DisplayName("deve lançar exceção quando usuário já possui negócio")
         void shouldThrowWhenProviderAlreadyExists() {
             ProviderRequest request = new ProviderRequest(
-                    "Outro Negócio", null, null
+                    "Outro Negócio", "outro-negocio", null, null, null
             );
 
             when(providerRepository.existsByUserId(user.getId())).thenReturn(true);
@@ -103,7 +103,7 @@ class ProviderServiceTest {
         @Test
         @DisplayName("deve criar negócio sem descrição e categoria")
         void shouldCreateProviderWithoutOptionalFields() {
-            ProviderRequest request = new ProviderRequest("Barbearia", null, null);
+            ProviderRequest request = new ProviderRequest("Barbearia", "barbearia-slug", null, null, null);
 
             when(providerRepository.existsByUserId(user.getId())).thenReturn(false);
             when(providerRepository.save(any())).thenAnswer(inv -> {
@@ -154,7 +154,7 @@ class ProviderServiceTest {
         @DisplayName("deve atualizar negócio com sucesso")
         void shouldUpdateProviderSuccessfully() {
             ProviderRequest request = new ProviderRequest(
-                    "Barbearia Atualizada", "Nova descrição", "Beleza"
+                    "Barbearia Atualizada", "barbearia-atualizada", "Nova descrição", "Beleza", null
             );
 
             when(providerRepository.findByUserId(user.getId())).thenReturn(Optional.of(provider));
@@ -172,7 +172,7 @@ class ProviderServiceTest {
         @Test
         @DisplayName("deve lançar exceção ao atualizar negócio inexistente")
         void shouldThrowWhenProviderNotFoundOnUpdate() {
-            ProviderRequest request = new ProviderRequest("Nome", null, null);
+            ProviderRequest request = new ProviderRequest("Nome", "slug", null, null, null);
 
             when(providerRepository.findByUserId(user.getId())).thenReturn(Optional.empty());
 
