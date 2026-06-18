@@ -41,6 +41,9 @@ public class NotificationService implements StreamListener<String, MapRecord<Str
     @Value("${aws.ses.from-name}")
     private String fromName;
 
+    @Value("${aws.access-key-id:}")
+    private String awsAccessKeyId;
+
     public void sendConfirmation(Reservation reservation) {
         publish(reservation, NotificationType.CONFIRMATION);
     }
@@ -146,6 +149,11 @@ public class NotificationService implements StreamListener<String, MapRecord<Str
     }
 
     private void sendEmail(String to, String subject, String htmlBody) {
+        if (awsAccessKeyId.isBlank()) {
+            log.warn("SES não configurado (sem credenciais) — email ignorado | destinatário: {}", to);
+            return;
+        }
+
         SendEmailRequest request = SendEmailRequest.builder()
                 .source(fromName + " <" + fromEmail + ">")
                 .destination(Destination.builder().toAddresses(to).build())
