@@ -1,3 +1,5 @@
+name: reservvo
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -5,14 +7,14 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: reservvo
-      POSTGRES_USER: ${DB_USERNAME:-reservvo}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-reservvo}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    networks:
+      - internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-reservvo} -d reservvo"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d reservvo"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -21,20 +23,13 @@ services:
     image: redis:7-alpine
     container_name: reservvo-redis
     restart: unless-stopped
-    command: >
-      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
-               redis-server --requirepass "$$REDIS_PASSWORD";
-             else
-               redis-server;
-             fi'
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass "${REDIS_PASSWORD}"
     volumes:
       - redis-data:/data
+    networks:
+      - internal
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -51,19 +46,26 @@ services:
       redis:
         condition: service_healthy
     environment:
-      SPRING_PROFILE: ${SPRING_PROFILE:-dev}
+      SPRING_PROFILE: prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/reservvo
-      DB_USERNAME: ${DB_USERNAME:-reservvo}
-      DB_PASSWORD: ${DB_PASSWORD:-reservvo}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       AWS_REGION: ${AWS_REGION:-sa-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-    ports:
-      - "8080:8080"
+      JAVA_TOOL_OPTIONS: "-Xmx512m -Xss512k -XX:MaxMetaspaceSize=128m"
+    networks:
+      - internal
+      - web
+
+networks:
+  internal:
+  web:
+    external: true
 
 volumes:
   postgres-data:
